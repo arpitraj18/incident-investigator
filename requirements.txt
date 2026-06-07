@@ -1,0 +1,46 @@
+# requirements.txt
+# Install with: pip install -r requirements.txt
+# Python 3.12 required.
+
+# --- Core ---
+python-dotenv==1.0.1
+
+# --- Database ---
+psycopg[binary]==3.2.3
+sqlalchemy==2.0.35
+pgvector==0.3.6
+
+# --- Redis ---
+redis==5.2.0
+
+# --- Web framework ---
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
+
+# --- Data processing ---
+pandas==2.2.3
+numpy==1.26.4
+scikit-learn==1.5.2
+
+# --- ML / Embeddings ---
+sentence-transformers==3.3.1
+
+# --- LLM / RAG ---
+langchain==0.3.7
+langchain-core==0.3.21
+langchain-community==0.3.7
+langgraph==0.2.50
+groq==0.13.0
+langchain-groq==0.2.1
+
+# --- Log parsing ---
+drain3==0.9.11
+
+# --- Dashboard (we'll use this Week 3) ---
+streamlit==1.40.2
+plotly==5.24.1
+
+# --- Dev / Testing ---
+pytest==8.3.3
+pytest-asyncio==0.24.0
+ruff==0.8.0

@@ -1,0 +1,43 @@
+# docker-compose.yml
+# Spins up PostgreSQL (with pgvector extension) and Redis.
+# Start:  docker compose up -d
+# Stop:   docker compose down
+# Logs:   docker compose logs -f
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: incident_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: incident_user
+      POSTGRES_PASSWORD: incident_pass
+      POSTGRES_DB: incident_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U incident_user -d incident_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: incident_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  postgres_data:
+  redis_data:
