@@ -39,6 +39,47 @@ BGL = Blue Gene/L supercomputer logs. Hardware-specific vocabulary (`R02-M1-N0-C
 
 ---
 
+## Limitations of prior work and how we improve on them
+
+The original BGL paper (Oliner & Stearley, 2007) identified two key weaknesses in their alert-filtering approach. These are worth being explicit about because they map directly to what we improve and where we still fall short.
+
+### Weakness 1: cross-source / cross-time alert correlation
+
+**Their problem:** no reliable way to determine whether two differently-worded messages described the same underlying event. Pattern matching and statistical filtering, no notion of *meaning*.
+
+**How we improve:**
+
+- Semantic embeddings (`sentence-transformers/all-MiniLM-L6-v2`) place "connection timeout on node 42" and "node 42 failed to respond within deadline" near each other in 384-d space — even with different wording. Fundamentally different capability than 2007.
+- The LangGraph agent reasons about whether a past incident relates to current symptoms, not just whether they share keywords.
+
+**Where we still fall short:**
+
+- Embedding similarity ≠ causal relatedness. Two semantically similar messages might describe unrelated problems; two causally linked failures might be textually very different ("disk full" vs. "service crashed").
+- We match on log content only — not system topology or temporal causality. Real cross-source correlation in production needs to model service dependencies.
+- Multi-modal correlation (CPU metric + log line + network signal) is out of scope; we're text-only.
+
+### Weakness 2: one-size-fits-all static thresholds
+
+**Their problem:** a single global filtering threshold across all alert categories. Different categories need different sensitivities; thresholds also drift over time.
+
+**How we improve:**
+
+- **DBSCAN** doesn't impose a global anomaly threshold — it finds dense regions in feature space, so different alert categories form differently-sized clusters that are implicitly tuned by the data.
+- **LSTM** outputs continuous anomaly *scores*, not binary decisions. Cutoffs can be applied per cluster or per category.
+- **The agentic layer** is the biggest gain. It can apply category-specific reasoning ("a single kernel parity error matters" vs. "transient network timeout needs N occurrences before mattering") because it has semantic understanding of category context.
+
+**Where we still fall short:**
+
+- "Thresholds change over time" is the genuinely hard part and we don't solve it. Our LSTM is trained once on labeled data, not continuously retrained.
+- True adaptive thresholding requires online learning, human-in-the-loop feedback, or explicit concept drift detection — all out of scope for v1.
+
+### Interview-ready synthesis
+
+> "Our system addresses both limitations meaningfully but not completely. Semantic embeddings give us a real shot at cross-source correlation that wasn't possible in 2007 — but they capture semantic similarity, not causal relatedness. The agentic layer applies different reasoning to different alert categories instead of one global threshold — but we don't adapt thresholds over time, which would require online learning or feedback loops. We're a step forward, not a solution. The remaining gap is well-defined and would be the natural next phase of work."
+
+The closing sentence matters — acknowledging the limits of your own work clearly signals calibration, which interviewers value more than overclaiming.
+
+---
 ## Architectural decisions and why
 
 ### Stack
