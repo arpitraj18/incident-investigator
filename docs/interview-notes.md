@@ -132,4 +132,64 @@ Almost no student-tier project does the eval. It's the resume bullet that matter
 
 ## Things to add as we build
 
+---
+
+## Day 4 — DBSCAN clustering results (the first real numbers)
+
+First stage that produced *measured* output rather than plumbing, so everything here is observed, not projected.
+
+### What was run
+
+DBSCAN over time-windowed log features. 2000 BGL rows → **830 non-empty 5-minute tumbling windows**, each a **115-dimensional** feature vector (volume, error rate, burst rate, distinct-template/component counts, plus per-component and per-template frequency columns). `eps = 2.5`, `min_samples = 3`, picked from the elbow of the k-distance curve (sort each point's distance to its k-th nearest neighbour; eps is where the curve kinks upward).
+
+### The headline result
+
+The ground-truth `is_anomaly` label was deliberately **held out of the feature matrix** — computed per window only as a post-hoc descriptor. Clustering still separated the data cleanly:
+
+- **275-window cluster at 0% anomalies** (cluster 3) — the dominant "normal KERNEL chatter" pattern.
+- **73 windows across 5 clusters at 100% anomalies** (clusters 6, 7, 23, 25, 31), all also 100% error-rate.
+- Global anomaly rate is **7.15%**, so unsupervised structure *concentrated* the anomalies instead of smearing them at the background rate.
+- **36 clusters total, 101 noise windows** (label −1).
+
+Because the label never entered the features, the model didn't cheat — it found the structure from template/component/error shape alone. When an interviewer asks "did it actually work?", this is the answer.
+
+**Resume bullet (fill in when updating the CV):**
+> Performed DBSCAN clustering on 830 time-windowed log features; unsupervised clustering (anomaly labels held out) concentrated 100% of anomalies into 5 distinct clusters (73 windows) against a 0% baseline cluster (275 windows), versus a global 7.15% anomaly rate.
+
+### Why DBSCAN, not KMeans
+
+Three reasons, each of which an interviewer can probe:
+
+- **No k up front.** We don't know the number of incident patterns. KMeans demands `k`; DBSCAN discovers it from density.
+- **Non-spherical clusters.** Incident patterns aren't convex equal-radius blobs. DBSCAN finds arbitrary-shaped dense regions; KMeans assumes round clusters.
+- **First-class outliers.** DBSCAN's noise label (−1) is an explicit "this window fits no pattern" signal. KMeans forces every point into a cluster, so there's nowhere for a genuine one-off to go.
+
+### Two findings worth *understanding*, not just reporting
+
+**Why anomalies landed in clusters, not in noise.** The naive intuition is "anomalies are rare → outliers → label −1." That happened on a synthetic test but *not* on real BGL. The reason: BGL's anomalous windows are **repetitive** — the same failure template recurs often enough to form its own dense region, so DBSCAN groups it. Anomalies only land in noise when they're one-off unique events. Ours clustering is the *more interesting* outcome: it means the incidents are detectable recurring patterns, not random noise.
+
+**Why Drain reported ~104 templates here but 157 at ingestion.** Not a bug — Drain is order-sensitive (gotcha #6). Ingestion reads the file in file order; clustering reads in timestamp order. Different traversal = different template-merge boundaries, landing at opposite ends of the documented 105–157 range. If the two ever need to match, order `fetch_logs` by `id` instead of `log_timestamp`.
+
+### The genuinely interesting anomaly: error_rate=1.00, anomaly_ratio=0.00
+
+Several clusters (e.g. 11, 26, 4) are full of error-*severity* log lines that BGL's ground truth does **not** mark as anomalies. Honest interpretation: either recoverable errors the operators chose not to flag, or a labeling gap in the dataset. No firm conclusion claimed — but noting it signals the output was actually read, not just summarised.
+
+### Design decisions locked in
+
+- `is_anomaly` excluded from clustering features (descriptor only) — so cluster↔anomaly alignment is a discovered signal, not circular leakage.
+- Results stored in a dedicated `log_windows` table, not a column on `raw_logs` — clustering is window-granularity and overlapping windows would make a per-row label ambiguous; `raw_logs` stays an append-only ingestion record.
+- StandardScaler before DBSCAN — counts and rates live on very different scales, and eps is a single threshold across all dimensions.
+- Clustering is idempotent (wipes prior rows for the dataset before insert), unlike the intentionally one-shot loader.
+- Scatter plot uses plotly (already a dependency) → no new packages.
+
+### Caveat to surface in the README
+
+2000 lines span **213 days**, so windows are sparse (~2–3 lines each). This is a property of the BGL *sample* (a thin slice across ~7 months), not the pipeline — one sentence in the README stops anyone reading the window counts as a bug. The 36 clusters are also mildly over-segmented; left untuned on purpose until the Day 12–13 eval harness gives an objective metric to optimise `eps`/PCA against. Tuning against a number, not by eye.
+
+**Interview phrasing:** "I held the anomaly labels out of the clustering features on purpose, so any alignment between clusters and anomalies is something the model discovered, not something I fed it. On BGL it concentrated the 7% anomalies into clusters that were either 0% or 100% anomalous — and they *clustered* rather than showing up as noise, which tells me the failures are recurring patterns, not random one-offs. I'm not tuning the cluster count by eye; the eval harness will give me a metric to optimise against."
+
+### Verification
+
+20 tests passing (11 prior + 8 new unit + 1 DB integration that runs against live Postgres), ruff clean. The `log_windows` round-trip is verified end-to-end.
+
 *(append below as project evolves — eval numbers, design changes, gotchas)*

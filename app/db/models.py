@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, Float, Integer, String, Text, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -39,3 +39,29 @@ class LogTemplate(Base):
     occurrence_count: Mapped[int] = mapped_column(Integer, default=0)
     first_seen: Mapped[datetime | None] = mapped_column(DateTime)
     last_seen: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+class LogWindow(Base):
+    """One time window of activity, with its DBSCAN cluster label.
+
+    Written by app/processing/clustering.py. cluster_label is the DBSCAN
+    cluster (-1 = noise). anomaly_ratio is a descriptor, not a cluster
+    input, so cluster<->anomaly alignment stays a real signal.
+    """
+
+    __tablename__ = "log_windows"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    window_start: Mapped[datetime | None] = mapped_column(DateTime)
+    window_end: Mapped[datetime | None] = mapped_column(DateTime)
+    log_count: Mapped[int] = mapped_column(Integer, default=0)
+    error_rate: Mapped[float] = mapped_column(Float, default=0.0)
+    burst_rate: Mapped[float] = mapped_column(Float, default=0.0)
+    anomaly_ratio: Mapped[float] = mapped_column(Float, default=0.0)
+    distinct_templates: Mapped[int] = mapped_column(Integer, default=0)
+    distinct_components: Mapped[int] = mapped_column(Integer, default=0)
+    cluster_label: Mapped[int] = mapped_column(Integer, index=True)
+    source_dataset: Mapped[str | None] = mapped_column(String(50))
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now()
+    )
